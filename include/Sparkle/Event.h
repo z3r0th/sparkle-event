@@ -9,14 +9,14 @@
 #include <memory>
 #include <map>
 
-// TODO: Remove functions by comparison? https://stackoverflow.com/questions/20833453/comparing-stdfunctions-for-equality
 // TODO: Support Handle to remove specific functions instead of all functions of specific object
 // TODO: Improve performance of Raise function
 
 namespace Sparkle
 {
     /// Base Class for events
-    class EventBase {
+    class EventBase
+    {
     private:
         std::string Name;
 
@@ -48,7 +48,7 @@ namespace Sparkle
         /// \param bound prepared lifecycle callback function
         /// \param t object reference
         template<typename T>
-        void InternalBind(LifecycleCallback bound, T * const t)
+        void InternalBind(LifecycleCallback bound, T *const t)
         {
             auto it = Binds.find(t);
             if (it != Binds.end())
@@ -62,11 +62,10 @@ namespace Sparkle
         }
 
         template<typename T>
-        void Bind(Callback f, T * const t, bool bindOnce)
+        [[maybe_unused]] void Bind(Callback f, T *const t, bool bindOnce)
         {
             assert(t != nullptr && "Cannot bind to a null pointer");
-            auto bound = [f, t, bindOnce](Args... args) -> bool
-            {
+            auto bound = [f, t, bindOnce](Args... args) -> bool {
                 f(std::forward<Args>(args)...);
                 return !bindOnce;
             };
@@ -74,14 +73,12 @@ namespace Sparkle
         }
 
         template<typename T>
-        void Bind(Callback f, std::weak_ptr<T> weak, bool bindOnce)
+        [[maybe_unused]] void Bind(Callback f, std::weak_ptr<T> weak, bool bindOnce)
         {
             if (auto t = weak.lock())
             {
-                auto bound = [weak, f, bindOnce](Args... args) -> bool
-                {
-                    if (!weak.expired())
-                    {
+                auto bound = [weak, f, bindOnce](Args... args) -> bool {
+                    if (!weak.expired()) {
                         f(std::forward<Args>(args)...);
                         return !bindOnce;
                     }
@@ -92,14 +89,12 @@ namespace Sparkle
         }
 
         template<typename T>
-        void Bind(void(T::* const f)(Args...), std::weak_ptr<T> weak, bool bindOnce)
+        [[maybe_unused]] void Bind(void(T::* const f)(Args...), std::weak_ptr<T> weak, bool bindOnce)
         {
             if (auto t = weak.lock())
             {
-                auto bound = [weak, f, bindOnce](Args... args) -> bool
-                {
-                    if (auto locked = weak.lock())
-                    {
+                auto bound = [weak, f, bindOnce](Args... args) -> bool {
+                    if (auto locked = weak.lock()) {
                         (locked.get()->*f)(std::forward<Args>(args)...);
                         return !bindOnce;
                     }
@@ -110,32 +105,30 @@ namespace Sparkle
         }
 
         template<typename T>
-        void Bind(void(T::* const f)(Args...), T * const t, bool bindOnce)
+        [[maybe_unused]] void Bind(void(T::* const f)(Args...), T *const t, bool bindOnce)
         {
             assert(t != nullptr && "Cannot bind to a null pointer");
-            auto bound = [t, f, bindOnce](Args... args) -> bool
-            {
+            auto bound = [t, f, bindOnce](Args... args) -> bool {
                 (t->*f)(std::forward<Args>(args)...);
                 return !bindOnce;
             };
             InternalBind(bound, t);
         }
 
-        void Bind(Callback cb, bool bindOnce)
+        [[maybe_unused]] void Bind(Callback cb, bool bindOnce)
         {
-            auto bound = [cb, bindOnce](Args... args) -> bool
-            {
+            auto bound = [cb, bindOnce](Args... args) -> bool {
                 cb(std::forward<Args>(args)...);
                 return !bindOnce;
             };
-            static void* StandaloneCallbackKey = reinterpret_cast<void*>(-1);
+            static void *StandaloneCallbackKey = reinterpret_cast<void *>(-1);
             InternalBind(bound, StandaloneCallbackKey);
         }
 
     public:
 
         /// Clears all references from this event
-        [[maybe_unused]] void Clear()
+        [[maybe_unused]] void RemoveAll()
         {
             Binds.clear();
         }
@@ -144,8 +137,8 @@ namespace Sparkle
         /// \tparam T object type
         /// \param t object pointer
         /// \return true if any reference to this object pointer is found
-        template <typename T>
-        [[maybe_unused]] [[nodiscard]] bool IsBound(T* t) const
+        template<typename T>
+        [[maybe_unused]] [[nodiscard]] bool IsBound(T *t) const
         {
             assert(t != nullptr && "Cannot check bind of a null pointer");
             return Binds.find(t) != Binds.end();
@@ -155,10 +148,24 @@ namespace Sparkle
         /// \tparam T
         /// \param weak
         /// \return true if any reference to this object pointer is found
-        template <typename T>
+        template<typename T>
         [[maybe_unused]] [[nodiscard]] bool IsBound(std::weak_ptr<T> weak) const
         {
             if (auto shared = weak.lock())
+            {
+                return IsBound(shared.get());
+            }
+            return false;
+        }
+
+        /// Is this pointer bounded as observer with any function to this event?
+        /// \tparam T
+        /// \param weak
+        /// \return true if any reference to this object pointer is found
+        template<typename T>
+        [[maybe_unused]] [[nodiscard]] bool IsBound(std::shared_ptr<T> shared) const
+        {
+            if (shared)
             {
                 return IsBound(shared.get());
             }
@@ -173,7 +180,7 @@ namespace Sparkle
         /// \param t object pointer
         /// \example event.Bind([]{...}, &reference);
         template<typename T>
-        [[maybe_unused]] void BindOnce(Callback f, T * const t)
+        [[maybe_unused]] void BindOnce(Callback f, T *const t)
         {
             Bind(f, t, true);
         }
@@ -186,9 +193,23 @@ namespace Sparkle
         /// \param t object pointer
         /// \example event.Bind([]{...}, &reference);
         template<typename T>
-        [[maybe_unused]] void Bind(Callback f, T * const t)
+        [[maybe_unused]] void Bind(Callback f, T *const t)
         {
             Bind(f, t, false);
+        }
+
+        /// Converts the shared pointer to a weak pointer and binds this function to the event related to the object.
+        /// The function will be called only on the next time the event is raised
+        /// the function might not be tied to the object, but they will be referenced together, so when removing the object
+        /// the function will also be removed. If the weak pointer is expired it will be removed on next Raise call.
+        /// \tparam T object type
+        /// \param f function reference
+        /// \param weak weak pointer to the object
+        /// \example event.Bind([]{...}, weak_ptr);
+        template<typename T>
+        [[maybe_unused]] void BindOnce(Callback f, std::shared_ptr<T> shared)
+        {
+            BindOnce(f, std::weak_ptr<T>(shared), true);
         }
 
         /// Binds this function to the event related to the object. The function will be called only on the next time the event is raised
@@ -204,6 +225,19 @@ namespace Sparkle
             Bind(f, weak, true);
         }
 
+        /// Converts the shared pointer to a weak pointer and binds this function to the event related to the object
+        /// the function might not be tied to the object, but they will be referenced together, so when removing the object
+        /// the function will also be removed. If the weak pointer is expired it will be removed on next Raise call.
+        /// \tparam T object type
+        /// \param f function reference
+        /// \param weak weak pointer to the object
+        /// \example event.Bind([]{...}, weak_ptr);
+        template<typename T>
+        [[maybe_unused]] void Bind(Callback f, std::shared_ptr<T> shared)
+        {
+            Bind(f, std::weak_ptr<T>(shared), false);
+        }
+
         /// Binds this function to the event related to the object
         /// the function might not be tied to the object, but they will be referenced together, so when removing the object
         /// the function will also be removed. If the weak pointer is expired it will be removed on next Raise call.
@@ -217,6 +251,20 @@ namespace Sparkle
             Bind(f, weak, false);
         }
 
+        /// Converts the shared pointer to a weak pointer and binds this object's function to the event.
+        /// The function will be called only on the next time the event is raised
+        /// The object will call the function and both must be valid (t->*f(...))
+        /// If the object expires before this Event does, all references to the object will be removed from this event on next Event Raise
+        /// \tparam T object type
+        /// \param f function reference
+        /// \param weak weak pointer to the object
+        /// \example event.Bind(&MyClass::Function, weak_ptr);
+        template<typename T>
+        [[maybe_unused]] void BindOnce(void(T::* const f)(Args...), std::shared_ptr<T> shared)
+        {
+            Bind(f, std::weak_ptr<T>(shared), true);
+        }
+
         /// Binds this object's function to the event. The function will be called only on the next time the event is raised
         /// The object will call the function and both must be valid (t->*f(...))
         /// If the object expires before this Event does, all references to the object will be removed from this event on next Event Raise
@@ -228,6 +276,19 @@ namespace Sparkle
         [[maybe_unused]] void BindOnce(void(T::* const f)(Args...), std::weak_ptr<T> weak)
         {
             Bind(f, weak, true);
+        }
+
+        /// Converts the shared pointer to a weak pointer and binds this object's function to the event.
+        /// The object will call the function and both must be valid (t->*f(...))
+        /// If the object expires before this Event does, all references to the object will be removed from this event on next Event Raise
+        /// \tparam T object type
+        /// \param f function reference
+        /// \param weak weak pointer to the object
+        /// \example event.Bind(&MyClass::Function, weak_ptr);
+        template<typename T>
+        [[maybe_unused]] void Bind(void(T::* const f)(Args...), std::shared_ptr<T> shared)
+        {
+            Bind(f, std::weak_ptr<T>(shared), false);
         }
 
         /// Binds this object's function to the event.
@@ -321,6 +382,20 @@ namespace Sparkle
             return false;
         }
 
+        /// Remove all references to the object this ptr is pointing to
+        /// \tparam T object type
+        /// \param ptr weak pointer
+        /// \return true if we found and removed the object reference, false otherwise
+        template<typename T>
+        [[maybe_unused]]bool Remove(std::shared_ptr<T> ptr)
+        {
+            if (ptr)
+            {
+                return Remove(ptr.get());
+            }
+            return false;
+        }
+
     };
 
     template<typename... Args>
@@ -382,6 +457,12 @@ namespace Sparkle
             return total;
         }
 
+        /// Cleanup expired weak pointers. (It automatically cleans up on Raise)
+        [[maybe_unused]] inline void Cleanup()
+        {
+            assert(false && "Not implemented");
+        }
+
 #pragma region Binder Wrapper
         /** Convenient functions wrapper to Binder **/
         using Callback = std::function<void(Args...)>;
@@ -398,16 +479,26 @@ namespace Sparkle
         template <typename T>
         [[maybe_unused]] inline void Bind(void(T::* const f)(Args...), std::weak_ptr<T> t) { Binder.Bind(f, t); }
         template <typename T>
+        [[maybe_unused]] inline void Bind(void(T::* const f)(Args...), std::shared_ptr<T> t) { Binder.Bind(f, t); }
+        template <typename T>
+        [[maybe_unused]] inline void BindOnce(void(T::* const f)(Args...), std::shared_ptr<T> t) { Binder.BindOnce(f, t); }
+        template <typename T>
         [[maybe_unused]] inline void BindOnce(void(T::* const f)(Args...), std::weak_ptr<T> t) { Binder.BindOnce(f, t); }
         template<typename T>
+        [[maybe_unused]] inline void Bind(Callback f, std::shared_ptr<T> t) { Binder.Bind(f, t); }
+        template<typename T>
         [[maybe_unused]] inline void Bind(Callback f, std::weak_ptr<T> t) { Binder.Bind(f, t); }
+        template<typename T>
+        [[maybe_unused]] inline void BindOnce(Callback f, std::shared_ptr<T> t) { Binder.BindOnce(f, t); }
         template<typename T>
         [[maybe_unused]] inline void BindOnce(Callback f, std::weak_ptr<T> t) { Binder.BindOnce(f, t); }
         template <typename T>
         [[maybe_unused]] inline bool Remove(T* const t) { return Binder.Remove(t); }
         template <typename T>
+        [[maybe_unused]] inline bool Remove(std::shared_ptr<T> t) { return Binder.Remove(t); }
+        template <typename T>
         [[maybe_unused]] inline bool Remove(std::weak_ptr<T> t) { return Binder.Remove(t); }
-        [[maybe_unused]] inline void Clear() { Binder.Clear(); }
+        [[maybe_unused]] inline void RemoveAll() { Binder.RemoveAll(); }
 #pragma endregion Binder Wrapper
 
     };

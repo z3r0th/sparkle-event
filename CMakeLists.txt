@@ -8,8 +8,9 @@ set(CMAKE_CXX_STANDARD 20)
 option(SPARKLE_BUILD_TESTS "Build SparkleEvents test cases" ON)
 option(SPARKLE_BUILD_EXAMPLES "Build SparkleEvents examples" ON)
 
-add_library(SparkleEvents INTERFACE
-        tests/test_event.cpp)
+add_library(SparkleEvents INTERFACE)
+add_library(Sparkle::SparkleEvents ALIAS SparkleEvents)
+
 target_include_directories(SparkleEvents INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
@@ -47,5 +48,5 @@ if(SPARKLE_BUILD_TESTS)
 endif()
 
 if(SPARKLE_BUILD_EXAMPLES)
-    #add_subdirectory(examples)
+    add_subdirectory(examples)
 endif()

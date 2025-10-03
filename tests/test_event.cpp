@@ -67,6 +67,20 @@ TEST_CASE("Member function binding with weak_ptr auto expires", "[event]") {
     REQUIRE(onIncrement.Size() == 0); // expired callback removed on Raise
 }
 
+TEST_CASE("Member function binding with shared_ptr converts to weak_ptr and auto expires", "[event]") {
+    Event<> onIncrement("OnIncrement");
+
+    std::weak_ptr<TestObject> weak;
+    {
+        auto strong = std::make_shared<TestObject>();
+        onIncrement.Bind(&TestObject::Increment, strong);
+        onIncrement();
+        REQUIRE(strong->counter == 1);
+    }
+    onIncrement();
+    REQUIRE(onIncrement.Size() == 0); // expired callback removed on Raise
+}
+
 TEST_CASE("BindOnce with member function", "[event]") {
     Event<int> onAdd("OnAdd");
     TestObject obj;
@@ -94,7 +108,7 @@ TEST_CASE("Multiple callbacks are invoked", "[event]") {
     REQUIRE(onMulti.CallbackCount() == 2);
 }
 
-TEST_CASE("Clear removes all callbacks", "[event]") {
+TEST_CASE("RemoveAll removes all callbacks", "[event]") {
     Event<int> onClear("OnClear");
 
     int called = 0;
@@ -102,7 +116,7 @@ TEST_CASE("Clear removes all callbacks", "[event]") {
 
     REQUIRE(onClear.CallbackCount() == 1);
 
-    onClear.Clear();
+    onClear.RemoveAll();
     REQUIRE(onClear.CallbackCount() == 0);
 
     onClear(42);
@@ -131,6 +145,19 @@ TEST_CASE("Remove by weak_ptr works", "[event]") {
     REQUIRE(onIncrement.Size() == 1);
 
     bool removed = onIncrement.Remove(weak);
+    REQUIRE(removed);
+    REQUIRE(onIncrement.Size() == 0);
+}
+
+TEST_CASE("Remove by shared_ptr works", "[event]") {
+    Event<> onIncrement("OnIncrement");
+
+    auto strong = std::make_shared<TestObject>();
+
+    onIncrement.Bind(&TestObject::Increment, strong);
+    REQUIRE(onIncrement.Size() == 1);
+
+    bool removed = onIncrement.Remove(strong);
     REQUIRE(removed);
     REQUIRE(onIncrement.Size() == 0);
 }
